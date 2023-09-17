@@ -1,0 +1,277 @@
+<meta charset="UTF-8">
+<script src="nsfwjs.min.js"></script>
+<script src="jszip.min.js"></script>
+<script src="lz-string.min.js"></script>
+<input type="file" id="f" webkitdirectory>
+<hr>
+Porn <input type="range" id="porn" value="30"> <br>
+Sexy <input type="range" id="sexy" value="30"> <br>
+Hentai <input type="range" id="hentai" value="30"> <br>
+优先匹配 <input type="checkbox" id="yx">
+<hr>
+<div hidden id="div">
+    <button onclick="decryptFile(3)">全黑覆盖</button> <br>
+    <button onclick="decryptFile(2)">模糊处理</button>
+    系数 <input type="range" id="xs"> <br>
+    <button onclick="decryptFile(1)">透明图覆盖（推荐）</button> <br>
+    <button onclick="decryptFile(0)">原图（用于查看是否误报）</button>
+</div>
+<hr>
+<div id="message"></div>
+<img src="" alt="" id="img">
+<script>
+    $dataSystem = {};
+    pngHex = [137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82];
+    encryptKey = "";
+    $__headlen = 16
+    $__signature = "5250474d56000000"
+    $__ver = "000301"
+    $__remain = "0000000000"
+    encryptKeyArray = [];
+    headerArray = [];
+    function hexToUint8Array(hexString) {
+        hexString = hexString.replace(/^0x/, '');
+        var byteArray = new Uint8Array(hexString.length / 2);
+        for (var i = 0; i < hexString.length; i += 2) {
+            byteArray[i / 2] = parseInt(hexString.substr(i, 2), 16);
+        }
+        return byteArray;
+    }
+    function tryFunction(core,json){
+        if(json){
+            try{
+                if(json.indexOf('{') === -1) {
+                    json =  LZString.decompressFromBase64(json)
+                }
+                $dataSystem = eval('(' + json + ')');
+                encryptKey = $dataSystem.encryptionKey;
+            }catch(e){
+                var k = json.match(/"[a-fA-F0-9]{32}"/);
+                if(k) encryptKey = k[0].slice(1,-1);
+            }
+        }
+        if(core){
+            try{
+                var PIXI = new Proxy(function(){}, {get: function () { return PIXI; },set: function () { return PIXI; },apply: function () { return PIXI },construct: function () { return PIXI},has: function () { return !!1}});
+                eval(core)
+                $__headlen =  Decrypter._headerlength || 16;
+                $__signature =  Decrypter.SIGNATURE || "5250474d56000000";
+                $__ver = Decrypter.VER || "000301";
+                $__remain = Decrypter.REMAIN || "0000000000";
+                if(Decrypter._encryptionKey && !encryptKey) {encryptKey = Decrypter._encryptionKey}
+            }catch(e){
+                var k = core.match(/["'`][a-fA-F0-9]{32}["'`]/);
+                if(k && !encryptKey) encryptKey = k[0].slice(1,-1);
+            }
+        }
+        try{
+            headerArray =  hexToUint8Array($__signature + $__ver + $__remain);
+            encryptKeyArray = hexToUint8Array(encryptKey);
+        }catch(e){}
+    }
+    function checkHex(u8,array){
+        var d = Math.min(u8.length,array.length)
+        for(var i = 0;i < d;i++){
+            if(u8[i]!=array[i]) return false;
+        }
+        return true;
+    }
+    function xor(a,b){
+        var d = Math.min(a.length,b.length)
+        for(var i = 0;i < d;i++){
+            a[i]^=b[i];
+        }
+    }
+    function detectKey(u8){
+        var d = Math.min(u8.length,pngHex.length)
+        var k = new Uint8Array(d);
+        for(var i = 0;i < d;i++){
+            k[i] =  pngHex[i] ^ u8[i];
+        }
+        return k;
+    }
+    function decrypt(buf){
+        if(!checkHex(new Uint8Array(buf,0,16),headerArray)){
+            console.error('wrong head') // 不是必要的
+        }
+        var u8 = new Uint8Array(buf,16,$__headlen);
+        if(!encryptKeyArray){
+            if(encryptKey){
+                encryptKeyArray = hexToUint8Array(encryptKey);
+            }else{
+                encryptKeyArray = detectKey(u8);
+            }
+        }
+        xor(u8,encryptKeyArray);
+        if(!checkHex(u8,pngHex)){
+            xor(u8,encryptKeyArray);
+            encryptKeyArray = detectKey(u8); 
+            xor(u8,encryptKeyArray);      
+        }
+        return new Blob([buf]).slice(16);
+    }
+    function encrypt(buf){
+        var b6 = new Uint8Array(buf,0,$__headlen);
+        xor(b6,encryptKeyArray);
+        return new Blob([headerArray,buf]);
+    }
+</script>
+<script>
+    var base = "";
+    var files,__json,__core;
+    function getBase() {
+        for (var i = 0; i < files.length; i++) {
+            file = files[i];
+            if (file.name == 'index.html') {
+                base = file.webkitRelativePath.slice(0, -10);
+                return;
+            }
+
+        }
+    }
+    f.oninput = function(){
+        if(f.files){
+            files  = f.files;
+            getBase();
+            for (var i = 0; i < files.length; i++) {
+                files[i].path = files[i].webkitRelativePath.slice(base.length);
+            }
+            div.hidden = ''
+        }else{
+            div.hidden = 'hidden'
+        }
+    }
+</script>
+<script>
+    var noop = ()=>{}
+    var model;
+    var obj = {}
+    var canvas = document.createElement('canvas');
+    var ctx = canvas.getContext('2d');
+    async function process(file,k,img,sign,e){
+        if(k==0){
+           await obj.file(file.path.replace(/\.(rpgmvp|png_)$/,".png"),e || file);
+        }else if(k==1){
+            canvas.width = img.width;
+            canvas.height = img.height;
+            var blob = await new Promise(res=>canvas.toBlob(res,"image/png"));
+            if(sign) {
+                blob = encrypt(await blob.arrayBuffer());
+            }
+            await obj.file(file.path,blob);
+        }else if(k == 2){
+            canvas.width = img.width;
+            canvas.height = img.height;
+            ctx.filter = 'blur(' +xs.value +'px)';
+            ctx.drawImage(img,0,0);
+            var blob = await new Promise(res=>canvas.toBlob(res,"image/png"));
+            if(sign) {
+                blob = encrypt(await blob.arrayBuffer());
+            }
+            await obj.file(file.path,blob);
+        }else if(k == 3){
+            canvas.width = img.width;
+            canvas.height = img.height;
+            ctx.fillRect(0,0,img.width,img.height);
+            var blob = await new Promise(res=>canvas.toBlob(res,"image/png"));
+            if(sign) {
+                blob = encrypt(await blob.arrayBuffer());
+            }
+            await obj.file(file.path,blob);
+        }
+    }
+    async function decryptFile(ktype){
+        obj=new JSZip();
+        div.hidden = 'hidden';
+        for(var i = 0; i < files.length; i++){
+            var file = files[i];
+            if (file.path == 'js/rpg_core.js') {
+                __core = file;
+            }
+            if (file.path == 'data/System.json') {
+                __json = file;
+            }
+        }
+        if(__core) __core = await __core.text();
+        if(__json) __json = await __json.text();
+        tryFunction(__core,__json);
+        var __yx = yx.checked;
+        function cankeep(ve){
+            if(__yx){
+                var className = ve[0].className;
+                var probability = ve[0].probability;
+                if(className == "Porn" && probability > porn.value / 100){return true}
+                if(className == "Hentai" && probability > hentai.value / 100){return true}
+                if(className == "Sexy" && probability > sexy.value / 100){return true}
+                return false;
+            }else{
+                for(var i = 0; i < ve.length;i++){
+                    var className = ve[i].className;
+                    var probability = ve[i].probability;
+                    if(className == "Porn" && probability > porn.value / 100){return true}
+                    if(className == "Hentai" && probability > hentai.value / 100){return true}
+                    if(className == "Sexy" && probability > sexy.value / 100){return true}
+                }
+                return false;
+            }
+        }
+        if(!model) model = await nsfwjs.load('quant_mid/', {type: "graph"})
+        // await nsfwjs.load('model/',{size: 299})
+        // await nsfwjs.load('quant_nsfw_mobilenet/',{size: 299})
+        var cnt = 0;
+        for(var i = 0; i < files.length;i++){
+            try{
+                var file = files[i];
+                message.innerHTML = cnt+ " " +  file.path;
+                if(file.name.endsWith('.png')){
+                    await new Promise(res=>{
+                        img.src = URL.createObjectURL(file);
+                        img.onload =async function(){
+                            let ve= await model.classify(img);
+                            if(cankeep(ve)){
+                                cnt++;
+                                message.innerHTML = cnt+ " " +  file.path;
+                                await process(file,ktype,img);
+                            }
+                            res()
+                        }
+                        img.onerror = function(){
+                            res();
+                        }
+                    }).catch(noop);
+                }
+                if(file.name.toLowerCase().endsWith('.rpgmvp') || file.name.toLowerCase().endsWith('.png_')){
+                        await new Promise(res=>{
+                            file.arrayBuffer().then(function(buf){
+                                var e = decrypt(buf);
+                                img.src = URL.createObjectURL(e);
+                                img.onload =async function(){
+                                    let ve= await model.classify(img);
+                                    if(cankeep(ve)){
+                                        cnt++;
+                                        message.innerHTML = cnt+ " " +  file.path;
+                                        await process(file,ktype,img,true,e);
+                                    }
+                                    res()
+                                }
+                                img.onerror = function(){
+                                    res();
+                                }
+                            });
+                    }).catch(noop);
+                }
+            }catch(e){
+                message.innerHTML = e;
+                await new Promise(res=>setTimeout(res,1000));
+            }
+           
+        }
+        obj.generateAsync({type:"blob"}).then(function(c) {
+            let a = document.createElement('a');
+            a.href = URL.createObjectURL(c)
+            a.download = 'process.zip'
+            a.click();
+            message.innerHTML = 'finish'
+        });
+    }
+</script>
